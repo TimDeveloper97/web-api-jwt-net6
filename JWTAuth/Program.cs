@@ -2,15 +2,21 @@ using JWTAuth.Business;
 using JWTAuth.Business.AuthService.Implementation;
 using JWTAuth.Business.AuthService.Interface;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using Newtonsoft.Json;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDatabase("UsersList"));
-builder.Services.AddControllers();
+builder.Services.AddControllers(opt =>
+{
+    opt.Filters.Add<TokenExpiredExceptionFilter>();
+});
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddAuthentication(opt =>
 {
@@ -28,12 +34,34 @@ builder.Services.AddAuthentication(opt =>
         ValidateIssuer = true,
         ValidIssuer = builder.Configuration["JWT:Issuer"],
         ValidateAudience = true,
-        ValidAudience = builder.Configuration["JWT:Audience"]
+        ValidateLifetime = true,
+        ValidAudience = builder.Configuration["JWT:Audience"],
+        LifetimeValidator = TokenLifetimeValidator.Validate,
+    };
+    opt.Events = new JwtBearerEvents
+    {
+        OnChallenge = context =>
+        {
+            if (context.AuthenticateFailure != null && context.AuthenticateFailure.GetType() == typeof(SecurityTokenExpiredException))
+            {
+                context.Response.Headers.Add("Token-Expired", "true");
+                context.Response.Headers.Add("Access-Control-Expose-Headers", "Token-Expired");
+                context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                context.Response.StatusCode = (int)System.Net.HttpStatusCode.Unauthorized;
+
+                context.Response.ContentType = "application/json";
+                var response = JsonConvert.SerializeObject(new { error = "Token expired." });
+                return context.Response.WriteAsync(response);
+            }
+
+            return Task.CompletedTask;
+        }
     };
 });
 builder.Services.AddHealthChecks();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c => {
+builder.Services.AddSwaggerGen(c =>
+{
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Title = "JWT Auth Sample",
@@ -78,3 +106,37 @@ app.MapControllers();
 app.MapHealthChecks("/health");
 
 app.Run();
+
+public static class TokenLifetimeValidator
+{
+    public static bool Validate(
+        DateTime? notBefore,
+        DateTime? expires,
+        SecurityToken tokenToValidate,
+        TokenValidationParameters @param
+    )
+    {
+        return (expires != null && expires > DateTime.UtcNow);
+    }
+}
+
+public class TokenExpiredExceptionFilter : IExceptionFilter
+{
+    public void OnException(ExceptionContext context)
+    {
+        if (context.Exception.GetType() == typeof(SecurityTokenExpiredException))
+        {
+            var response = new
+            {
+                error = "Token expired.huhuhuhu"
+            };
+
+            context.Result = new JsonResult(response)
+            {
+                StatusCode = (int)System.Net.HttpStatusCode.Unauthorized
+            };
+
+            context.ExceptionHandled = true;
+        }
+    }
+}
