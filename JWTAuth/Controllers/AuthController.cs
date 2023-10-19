@@ -20,6 +20,16 @@ namespace JWTAuth.Controllers
         }
 
         // POST: auth/login
+        /// <summary>
+        /// Retrieves a specific product by unique id
+        /// </summary>
+        /// <remarks>Awesomeness!</remarks>
+        /// <response code="200">Product created</response>
+        /// <response code="400">Product has missing/invalid values</response>
+        /// <response code="500">Oops! Can't create your product right now</response>
+        [ProducesResponseType(typeof(LoginUser), 200)]
+        [ProducesResponseType(typeof(IDictionary<string, string>), 400)]
+        [ProducesResponseType(500)]
         [AllowAnonymous]
         [HttpPost]
         public async Task<IActionResult> Login([FromBody] LoginUser user)
