@@ -23,7 +23,15 @@ namespace JWTAuth.Models
 
     public class LoginUser
     {
+        /// <summary>
+        /// The name of the product
+        /// </summary>
+        /// <example>Men's basketball shoes</example>
         public string UserName { get; set; } = "";
+        /// <summary>
+        /// Quantity left in stock
+        /// </summary>
+        /// <example>10</example>
         public string Password { get; set; } = "";
     }
 
